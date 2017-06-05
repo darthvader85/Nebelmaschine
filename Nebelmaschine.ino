@@ -9,6 +9,8 @@
  ****************************************************/
 
 #include <Adafruit_MAX31865.h>
+#define Loopdelay 1000
+#define AutomaticTimeMax 60000UL
 
 /*
 State 0: heat_up
@@ -26,7 +28,7 @@ const int S_WAITTILLHOT = 1;
 const int S_CHECKINPUTS = 2;
 const int S_RUN = 3;
 const int S_AUTOMATIC = 4;
-const int S_WAITHIGHWAYRED = 5;
+const int S_AUTOMATIC_RUN= 5;
 const int S_COUNTRYYELLOW = 6;
 const int S_WAITCOUNTRYYELLOW = 7;
 
@@ -40,9 +42,13 @@ const int PumpPin = 9;
 
 const int IntensityPin = 0;
 
-const int debug=1;
+unsigned long waitUntil=0;
+unsigned long waitAutomatic=0;
 
+const int debug=1;
+float FogIntensity ;
 unsigned long time;
+
 
 // Use software SPI: CS, DI, DO, CLK
 Adafruit_MAX31865 max = Adafruit_MAX31865(5, 4, 3, 2);
@@ -66,12 +72,16 @@ void setup() {
   pinMode(PumpPin, OUTPUT);
   digitalWrite(HeaterPin, HIGH);
   digitalWrite(PumpPin, HIGH);
+  digitalWrite(ReadyLedPin, HIGH);
+  waitUntil += Loopdelay;
+  waitAutomatic=0;
 }
 
 
 void loop() {
   static int state = S_HEATUP;
   time = millis();
+  if ((long)(time - waitUntil) >= 0) {
   if(debug)
   {
     Serial.print("Time:"); Serial.println(time);
@@ -81,7 +91,7 @@ void loop() {
   float temperature = max.temperature(100, RREF);
   if(temperature<=20.0)
   {
-    digitalWrite(ReadyLedPin, LOW);
+    digitalWrite(ReadyLedPin, HIGH);
     state = S_WAITTILLHOT;
   }
   switch (state)  {
@@ -101,7 +111,7 @@ void loop() {
       {
         digitalWrite(HeaterPin, HIGH);
         digitalWrite(HeatLedPin, LOW);
-        digitalWrite(ReadyLedPin, HIGH);
+        digitalWrite(ReadyLedPin, LOW);
         state = S_CHECKINPUTS;
       }
       break;
@@ -112,7 +122,7 @@ void loop() {
       }
       if(temperature<=27.0)
       {
-        digitalWrite(ReadyLedPin, LOW);
+        digitalWrite(ReadyLedPin, HIGH);
         state = S_WAITTILLHOT;
       }
       if(digitalRead(AutomaticSwitchPin)==LOW)
@@ -147,18 +157,30 @@ void loop() {
       {
         Serial.print("Temperature (AUTOMATIC) = "); Serial.println(temperature);
       }
-      float FogIntensity = analogRead(IntensityPin)*(100/1023);
+      FogIntensity = (float) (analogRead(IntensityPin)*(100.0/1023.0));
       if(debug)
       {
         Serial.print("Temperature (AUTOMATIC) = "); Serial.println(temperature);
-        Serial.print("Intensity (CHECKINPUTS) = "); Serial.print(FogIntensity); Serial.print("%");
+        Serial.print("Intensity (AUTOMATIC) = "); Serial.print(FogIntensity); Serial.print("%");
       }   
       digitalWrite(PumpPin,LOW);
-      delay((long)60000);
-      digitalWrite(PumpPin,HIGH);
-      state=S_CHECKINPUTS;
-      break;     
+      waitAutomatic=waitUntil+(long)((float)AutomaticTimeMax*FogIntensity);
+      state=S_AUTOMATIC_RUN;
+      break;   
+    case S_AUTOMATIC_RUN:
+      if(debug)
+      {
+        Serial.print("Temperature (AUTOMATIC_RUN) = "); Serial.println(temperature);
+        Serial.print("Time to Wait (AUTOMATIC_RUN) = "); Serial.print((long)(time-waitAutomatic)); Serial.print("%");
+      }   
+      if((long)(time-waitAutomatic) >= 0){
+        digitalWrite(PumpPin,HIGH);
+        state = S_CHECKINPUTS;
+      }
+      break;
+  }
+  waitUntil += Loopdelay;  // wait another interval cycle
   }
   //Serial.println();
-  delay(100);
+ // delay(100);
 }
