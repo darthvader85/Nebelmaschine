@@ -34,8 +34,8 @@ const int HeaterPin = 8;
 const int PumpPin = 9;
 
 const int IntensityPin = 0;
-const float Temp_min=25;
-const float Temp_max=30;
+const float Temp_min=180;
+const float Temp_max=300;
 int blink_Counter=0;
 
 unsigned long waitUntil=0;
